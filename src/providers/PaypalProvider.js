@@ -6,9 +6,20 @@ const checkoutNodeJssdk = require('@paypal/checkout-server-sdk');
  */
 class PaypalProvider {
     constructor() {
-        const clientId = process.env.PAYPAL_CLIENT_ID;
-        const clientSecret = process.env.PAYPAL_CLIENT_SECRET;
-        const mode = process.env.PAYPAL_MODE || 'live';
+        let clientId = process.env.PAYPAL_CLIENT_ID || '';
+        let clientSecret = process.env.PAYPAL_CLIENT_SECRET || '';
+        let mode = process.env.PAYPAL_MODE || 'live';
+
+        // Clean up common issues like accidentally copied quotes or trailing spaces
+        clientId = clientId.replace(/['"]+/g, '').trim();
+        clientSecret = clientSecret.replace(/['"]+/g, '').trim();
+        mode = mode.replace(/['"]+/g, '').trim();
+
+        if (!clientId || !clientSecret) {
+            console.warn('⚠️ WARNING: PAYPAL_CLIENT_ID or PAYPAL_CLIENT_SECRET is missing in environment variables.');
+        }
+
+        console.log(`[PayPal] Initializing in ${mode.toUpperCase()} mode. Client ID starts with: ${clientId.substring(0, 5)}...`);
 
         if (mode === 'live') {
             this.environment = new checkoutNodeJssdk.core.LiveEnvironment(clientId, clientSecret);
