@@ -138,9 +138,25 @@ exports.transfer = async (req, res) => {
                 throw new Error('Insufficient funds');
             }
 
-            // Find valid recipient
-            const recipientUser = await tx.user.findUnique({ where: { email: recipient } });
-            if (!recipientUser) throw new Error('Recipient user not found');
+            // Find valid recipient - Robust Lookup
+            const recipientTrimmed = recipient.trim();
+            let recipientUser;
+
+            // 1. Try Email Lookup (findFirst for case-insensitivity check)
+            recipientUser = await tx.user.findFirst({
+                where: {
+                    email: recipientTrimmed
+                }
+            });
+
+            // 2. Try ID Lookup if recipient is a number and email lookup failed
+            if (!recipientUser && /^\d+$/.test(recipientTrimmed)) {
+                recipientUser = await tx.user.findUnique({
+                    where: { id: parseInt(recipientTrimmed) }
+                });
+            }
+
+            if (!recipientUser) throw new Error('Recipient user not found (Checked Email & Account #)');
 
             if (recipientUser.id === userId) throw new Error('Cannot transfer to yourself');
 

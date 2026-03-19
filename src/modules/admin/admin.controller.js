@@ -89,7 +89,7 @@ exports.getDashboardStats = async (req, res) => {
         const recentActivity = recentInvoices.map(inv => ({
             type: inv.status === 'paid' ? 'success' : 'warning',
             title: inv.status === 'paid' ? 'Tenant rent payment received' : 'Rent invoice processed',
-            description: `Unit ${inv.unit.name} ${inv.status === 'paid' ? 'paid' : 'billed'} ₹${inv.status === 'paid' ? inv.rent : inv.amount} for ${inv.month}`
+            description: `Unit ${inv.unit.name} ${inv.status === 'paid' ? 'paid' : 'billed'} $${inv.status === 'paid' ? inv.rent : inv.amount} for ${inv.month}`
         }));
 
         res.json({
