@@ -140,8 +140,8 @@ exports.getReports = async (req, res) => {
             },
             detailed: {
                 monthlyRentCollected,
-                monthlyPlatformFeeEarned,
-                totalPlatformFeesCollected,
+                monthlyServiceFeeEarned: monthlyPlatformFeeEarned,
+                totalServiceFeesCollected: totalPlatformFeesCollected,
                 pendingRents,
                 paymentSuccessRate: successRate,
                 paymentFailedRate: failedRate

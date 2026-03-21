@@ -31,15 +31,15 @@ class StripeProvider {
      * Splits payment between Landlord and Platform
      * @param {number} totalAmount - Total paid by tenant ($1514.99)
      * @param {number} landlordAmount - Amount routed to landlord ($1500)
-     * @param {number} platformFee - Amount routed to platform ($14.99)
+     * @param {number} serviceFee - Amount routed to platform ($14.99)
      * @param {string} destinationAccount - Landlord's connected account ID
      */
-    async transfer(totalAmount, landlordAmount, platformFee, destinationAccount) {
+    async transfer(totalAmount, landlordAmount, serviceFee, destinationAccount) {
         if (!this.isActive) {
             throw new Error('Stripe Provider is not configured (API Key missing)');
         }
 
-        console.log(`[STRIPE] Transferring ${landlordAmount} to ${destinationAccount} and ${platformFee} to Platform`);
+        console.log(`[STRIPE] Transferring ${landlordAmount} to ${destinationAccount} and ${serviceFee} to Platform`);
         
         // Stripe Connect Transfer logic:
         // const transfer = await stripe.transfers.create({ ... });

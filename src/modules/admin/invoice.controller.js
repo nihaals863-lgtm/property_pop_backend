@@ -1,7 +1,7 @@
 const prisma = require('../../config/prisma');
 const accountingService = require('../../services/AccountingService');
 
-const PLATFORM_FEE = 14.99;
+const SERVICE_FEE = 14.99;
 
 // GET /api/admin/invoices
 exports.getAllInvoices = async (req, res) => {
@@ -41,7 +41,7 @@ exports.createInvoice = async (req, res) => {
 
         const invoiceNo = `INV-${Math.floor(100 + Math.random() * 900)}-${Date.now().toString().slice(-4)}`;
         const rentVal = parseFloat(rent) || 0;
-        const total = rentVal + PLATFORM_FEE;
+        const total = rentVal + SERVICE_FEE;
 
         const invoice = await prisma.invoice.create({
             data: {
@@ -50,8 +50,8 @@ exports.createInvoice = async (req, res) => {
                 unitId: parseInt(unitId),
                 month,
                 rent: rentVal,
-                serviceFees: PLATFORM_FEE,
-                platformFee: PLATFORM_FEE,
+                serviceFees: SERVICE_FEE,
+                platformFee: SERVICE_FEE,
                 amount: total,
                 status: 'draft'
             },
@@ -78,7 +78,7 @@ exports.updateInvoice = async (req, res) => {
         if (!currentInvoice) return res.status(404).json({ message: 'Invoice not found' });
 
         const rentVal = rent !== undefined ? parseFloat(rent) : parseFloat(currentInvoice.rent);
-        const total = rentVal + PLATFORM_FEE;
+        const total = rentVal + SERVICE_FEE;
 
         // Atomic update and ledger entry
         const result = await prisma.$transaction(async (tx) => {
@@ -86,8 +86,8 @@ exports.updateInvoice = async (req, res) => {
                 where: { id: parseInt(id) },
                 data: {
                     rent: rentVal,
-                    serviceFees: PLATFORM_FEE,
-                    platformFee: PLATFORM_FEE,
+                    serviceFees: SERVICE_FEE,
+                    platformFee: SERVICE_FEE,
                     amount: total,
                     status: status || currentInvoice.status,
                     month: month || currentInvoice.month,

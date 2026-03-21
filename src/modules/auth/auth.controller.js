@@ -13,13 +13,33 @@ exports.login = async (req, res) => {
             return res.status(400).json({ errors: errors.array() });
         }
 
-        const { email, password } = req.body;
+        let { email, password } = req.body;
+        const originalEmail = email ? email.trim() : '';
+        email = originalEmail.toLowerCase();
 
-        const user = await prisma.user.findUnique({ where: { email } });
-        if (!user) return res.status(401).json({ message: 'Invalid credentials' });
+        console.log(`DEBUG: Login attempt for: "${originalEmail}"`);
 
+        let user = await prisma.user.findUnique({ where: { email } });
+        
+        if (!user) {
+            console.log(`DEBUG: User not found with lowercase email. Trying original case...`);
+            user = await prisma.user.findUnique({ where: { email: originalEmail } });
+        }
+
+        if (!user) {
+            console.log(`DEBUG: User "${originalEmail}" NOT FOUND in database.`);
+            return res.status(401).json({ message: 'Invalid credentials' });
+        }
+
+        console.log(`DEBUG: User found in DB. Comparing passwords...`);
         const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res.status(401).json({ message: 'Invalid credentials' });
+        
+        if (!isMatch) {
+            console.log(`DEBUG: Password MISMATCH for user: "${originalEmail}"`);
+            return res.status(401).json({ message: 'Invalid credentials' });
+        }
+
+        console.log(`DEBUG: Login SUCCESS for user: "${originalEmail}"`);
 
         const { accessToken, refreshToken } = generateTokens(user);
 
@@ -92,7 +112,8 @@ exports.register = async (req, res) => {
             return res.status(400).json({ errors: errors.array() });
         }
 
-        const { email, password, name, role, phone, companyName } = req.body;
+        let { email, password, name, role, phone, companyName } = req.body;
+        email = email.trim().toLowerCase();
 
         // Strict Role Check - Security
         if (role === 'ADMIN') {

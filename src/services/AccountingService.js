@@ -22,7 +22,6 @@ class AccountingService {
         } = txData;
 
         // Fetch last balance to calculate new balance
-        // Note: In high-concurrency, this needs a row-level lock or a different balance approach
         const lastTx = await txClient.transaction.findFirst({
             orderBy: { id: 'desc' }
         });
@@ -36,7 +35,7 @@ class AccountingService {
                 type,
                 amount: parseFloat(amount),
                 balance: newBalance,
-                status: 'Completed',
+                status: 'SUCCESS',
                 invoiceId,
                 propertyId,
                 ownerId,
@@ -61,18 +60,31 @@ class AccountingService {
 
             const amountPaid = paymentData.amountPaid || invoice.amount;
 
-            // Update Invoice
+            // 1. Update Invoice status and confirmation
             const updatedInvoice = await tx.invoice.update({
                 where: { id: invoiceId },
                 data: {
                     status: 'paid',
                     paidAt: new Date(),
                     paymentMethod: paymentData.method,
-                    totalPaid: parseFloat(amountPaid)
+                    totalPaid: parseFloat(amountPaid),
+                    confirmationStatus: 'Confirmed',
+                    confirmedAt: new Date()
                 }
             });
 
-            // Record Rent Income for Owner
+            // 2. [NEW] Auto-Activate DRAFT Lease if applicable
+            // If the tenant has a DRAFT lease for this unit, make it ACTIVE
+            await tx.lease.updateMany({
+                where: {
+                    tenantId: invoice.tenantId,
+                    unitId: invoice.unitId,
+                    status: 'DRAFT'
+                },
+                data: { status: 'Active' }
+            });
+
+            // 3. Record Rent Income for Owner in Ledger
             await this.recordTransaction({
                 description: `Rent Payment for Invoice ${invoice.invoiceNo}`,
                 type: 'Income',
@@ -83,10 +95,10 @@ class AccountingService {
                 idempotencyKey: `${paymentData.idempotencyKey}-RENT`
             }, tx);
 
-            // Record Service Fee Income for Admin
+            // 4. Record Service Fee Income for Admin
             if (paymentData.serviceFee > 0) {
                 await this.recordTransaction({
-                    description: `Service Fee for Invoice ${invoice.invoiceNo}`,
+                    description: `Monthly Service Fee ($14.99) for Invoice ${invoice.invoiceNo}`,
                     type: 'Income',
                     amount: paymentData.serviceFee,
                     invoiceId: invoice.id,

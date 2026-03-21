@@ -19,13 +19,13 @@ exports.getPaymentConfig = async (req, res) => {
         });
 
         const config = {
-            platformFee: 14.99,
+            serviceFee: 14.99,
             currency: 'USD',
             rentExample: 1500.00 // Illustration purpose
         };
 
         settings.forEach(s => {
-            if (s.key === 'platform_fee') config.platformFee = parseFloat(s.value);
+            if (s.key === 'platform_fee') config.serviceFee = parseFloat(s.value);
             if (s.key === 'currency') config.currency = s.value;
         });
 

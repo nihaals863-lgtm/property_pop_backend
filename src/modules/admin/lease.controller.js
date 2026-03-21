@@ -15,23 +15,45 @@ exports.getLeaseHistory = async (req, res) => {
             orderBy: { startDate: 'desc' }
         });
 
-        const formatted = leases.map(l => ({
-            id: l.id,
-            unit: l.bedroom ? `${l.unit.name} (${l.bedroom})` : l.unit.name,
-            unitNumber: l.unit.name,
-            bedroom: l.bedroom,
-            type: l.unit.rentalMode, // Uses FULL_UNIT or BEDROOM_WISE
-            scope: l.unit.rentalMode === 'BEDROOM_WISE' ? 'Per Bedroom' : 'Monthly',
-            tenant: l.tenant.name,
-            term: l.startDate && l.endDate
-                ? `${l.startDate.toISOString().substring(0, 10)} - ${l.endDate.toISOString().substring(0, 10)}`
-                : 'Date Pending (DRAFT)',
-            status: l.status.toLowerCase(),
-            startDate: l.startDate,
-            endDate: l.endDate,
-            monthlyRent: l.monthlyRent || 0,
-            securityDeposit: l.securityDeposit || 0
-        }));
+        const now = new Date();
+        now.setHours(0, 0, 0, 0); // Compare dates only
+
+        const formatted = leases.map(l => {
+            let status = l.status.toLowerCase();
+            
+            // Dynamic Status Calculation for active/expired
+            if (l.startDate && l.endDate && (status === 'active' || status === 'expired')) {
+                const sDate = new Date(l.startDate);
+                sDate.setHours(0, 0, 0, 0);
+                const eDate = new Date(l.endDate);
+                eDate.setHours(0, 0, 0, 0);
+
+                if (now > eDate) {
+                    status = 'expired';
+                } else {
+                    // It's either active or upcoming, but we'll show active
+                    status = 'active';
+                }
+            }
+
+            return {
+                id: l.id,
+                unit: l.bedroom ? `${l.unit.name} (${l.bedroom})` : l.unit.name,
+                unitNumber: l.unit.name,
+                bedroom: l.bedroom,
+                type: l.unit.rentalMode, // Uses FULL_UNIT or BEDROOM_WISE
+                scope: l.unit.rentalMode === 'BEDROOM_WISE' ? 'Per Bedroom' : 'Monthly',
+                tenant: l.tenant.name,
+                term: l.startDate && l.endDate
+                    ? `${l.startDate.toISOString().substring(0, 10)} - ${l.endDate.toISOString().substring(0, 10)}`
+                    : 'Date Pending (DRAFT)',
+                status: status,
+                startDate: l.startDate,
+                endDate: l.endDate,
+                monthlyRent: l.monthlyRent || 0,
+                securityDeposit: l.securityDeposit || 0
+            };
+        });
 
         res.json(formatted);
     } catch (e) {
@@ -103,7 +125,11 @@ exports.getActiveLease = async (req, res) => {
         const activeLease = await prisma.lease.findFirst({
             where: {
                 unitId: parseInt(unitId),
-                status: { in: ['Active', 'DRAFT'] }
+                status: { in: ['Active', 'DRAFT'] },
+                OR: [
+                    { endDate: null },
+                    { endDate: { gte: new Date() } }
+                ]
             },
             include: {
                 tenant: true
@@ -212,7 +238,7 @@ exports.createLease = async (req, res) => {
 
         // NEW: Auto-create Invoice for the first month if Lease is Active
         if (lease.status === 'Active') {
-            const PLATFORM_FEE = 14.99;
+            const SERVICE_FEE = 14.99;
             const monthStr = new Date(startDate).toLocaleString('default', { month: 'long', year: 'numeric' });
 
             const existingInvoice = await prisma.invoice.findFirst({
@@ -227,8 +253,8 @@ exports.createLease = async (req, res) => {
                 const invoiceNo = `INV-${Date.now()}`;
 
                 // Ensure values are from the source of truth (the lease calculation above)
-                // PLATFORM_FEE is mandatory and added to rent
-                const totalAmount = rent + PLATFORM_FEE;
+                // SERVICE_FEE is mandatory and added to rent
+                const totalAmount = rent + SERVICE_FEE;
 
                 await prisma.invoice.create({
                     data: {
@@ -237,7 +263,7 @@ exports.createLease = async (req, res) => {
                         unitId: uId,
                         month: monthStr,
                         rent: rent,
-                        serviceFees: PLATFORM_FEE,
+                        serviceFees: SERVICE_FEE,
                         amount: totalAmount,
                         status: 'Unpaid'
                     }
@@ -269,14 +295,22 @@ exports.getUnitsWithTenants = async (req, res) => {
                 rentalMode: rentalMode,
                 leases: {
                     some: {
-                        status: { in: ['DRAFT', 'Active'] }
+                        status: { in: ['DRAFT', 'Active'] },
+                        OR: [
+                            { endDate: null },
+                            { endDate: { gte: new Date() } }
+                        ]
                     }
                 }
             },
             include: {
                 leases: {
                     where: {
-                        status: { in: ['DRAFT', 'Active'] }
+                        status: { in: ['DRAFT', 'Active'] },
+                        OR: [
+                            { endDate: null },
+                            { endDate: { gte: new Date() } }
+                        ]
                     },
                     include: {
                         tenant: true

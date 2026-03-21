@@ -47,8 +47,8 @@ class PaymentProvider {
         return this.getProvider().charge(amount, currency);
     }
 
-    async transfer(totalAmount, landlordAmount, platformFee, destinationAccount) {
-        return this.getProvider().transfer(totalAmount, landlordAmount, platformFee, destinationAccount);
+    async transfer(totalAmount, landlordAmount, serviceFee, destinationAccount) {
+        return this.getProvider().transfer(totalAmount, landlordAmount, serviceFee, destinationAccount);
     }
 
     async refund(transactionId, amount) {

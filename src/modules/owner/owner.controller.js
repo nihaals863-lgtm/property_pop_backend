@@ -3,7 +3,7 @@ const prisma = require('../../config/prisma');
 // GET /api/owner/dashboard/stats
 exports.getOwnerDashboardStats = async (req, res) => {
     try {
-        const ownerId = req.user.id; // From Auth Middleware
+        const ownerId = parseInt(req.user.id); // From Auth Middleware
 
         // 1. Properties Owned
         const propertyCount = await prisma.property.count({ where: { ownerId } });
@@ -80,7 +80,7 @@ exports.getOwnerDashboardStats = async (req, res) => {
 // GET /api/owner/properties
 exports.getOwnerProperties = async (req, res) => {
     try {
-        const ownerId = req.user.id;
+        const ownerId = parseInt(req.user.id);
         const properties = await prisma.property.findMany({
             where: { ownerId },
             include: {
@@ -218,7 +218,7 @@ exports.getOwnerFinancials = async (req, res) => {
 // GET /api/owner/dashboard/financial-pulse
 exports.getOwnerFinancialPulse = async (req, res) => {
     try {
-        const ownerId = req.user.id;
+        const ownerId = parseInt(req.user.id);
 
         // Get properties for this owner
         const properties = await prisma.property.findMany({ where: { ownerId }, include: { units: true } });
@@ -278,7 +278,7 @@ exports.getOwnerFinancialPulse = async (req, res) => {
 // GET /api/owner/profile
 exports.getProfile = async (req, res) => {
     try {
-        const ownerId = req.user.id;
+        const ownerId = parseInt(req.user.id);
         const user = await prisma.user.findUnique({
             where: { id: ownerId }
         });
@@ -307,7 +307,7 @@ exports.getProfile = async (req, res) => {
 // GET /api/owner/reports
 exports.getOwnerReports = async (req, res) => {
     try {
-        const ownerId = req.user.id;
+        const ownerId = parseInt(req.user.id);
 
         // Fetch properties to check for data existence
         const properties = await prisma.property.findMany({ where: { ownerId } });
@@ -399,7 +399,7 @@ exports.getOwnerReports = async (req, res) => {
 exports.downloadOwnerReport = async (req, res) => {
     try {
         const PDFDocument = require('pdfkit');
-        const ownerId = req.user.id;
+        const ownerId = parseInt(req.user.id);
         const { type } = req.query;
 
         // Fetch properties for context
@@ -719,10 +719,11 @@ exports.downloadOwnerReport = async (req, res) => {
 // GET /api/owner/notifications
 exports.getNotifications = async (req, res) => {
     try {
-        const ownerId = req.user.id;
+        const ownerId = parseInt(req.user.id);
         const properties = await prisma.property.findMany({ where: { ownerId } });
         const propertyIds = properties.map(p => p.id);
 
+        const email = (req.user.email || '').trim().toLowerCase(); // Now available in JWT and normalized
         const notifications = [];
 
         // 1. Open Tickets (Action Required)
@@ -798,10 +799,10 @@ exports.getNotifications = async (req, res) => {
         // 4. Pending Invitations (New)
         const pendingInvitations = await prisma.invitation.findMany({
             where: {
-                email: req.user.email,
+                email: email,
                 status: 'Pending'
             },
-            include: { inviter: true }
+            include: { user: true }
         });
 
         pendingInvitations.forEach(inv => {
@@ -809,7 +810,7 @@ exports.getNotifications = async (req, res) => {
                 id: `INV-${inv.id}`,
                 type: 'info',
                 title: 'New Invitation',
-                message: `Invite from ${inv.inviter?.email || 'Unknown'}: Join as ${inv.role}`,
+                message: `Invite from ${inv.user?.email || 'Unknown'}: Join as ${inv.role}`,
                 date: inv.createdAt
             });
         });

@@ -10,7 +10,7 @@ exports.getDashboard = async (req, res) => {
             where: { id: userId },
             include: {
                 leases: {
-                    where: { status: 'Active' },
+                    where: { status: { in: ['Active', 'Draft'] } },
                     include: { unit: true }
                 },
                 insurances: true
@@ -40,11 +40,25 @@ exports.getDashboard = async (req, res) => {
         let dueStatus = 'No Dues';
         let serviceFee = 'Service Fee: $0.00';
         let subValue = 'All caught up';
-        let rentDetails = null; // New detailed breakdown
+        const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        const currentMonth = monthNames[new Date().getMonth()];
+
+        let rentAmount = activeLease?.monthlyRent ? parseFloat(activeLease.monthlyRent) : (activeLease?.unit?.rentAmount ? parseFloat(activeLease.unit.rentAmount) : 1000);
+        const leaseEndDate = activeLease?.endDate || new Date(new Date().setFullYear(new Date().getFullYear() + 1));
+
+        let rentDetails = {
+            propertyName: activeLease?.unit?.property?.name || 'N/A',
+            unitName: activeLease?.unit?.name || 'N/A',
+            monthlyRent: rentAmount,
+            dueDate: '1st of every month',
+            month: currentMonth,
+            rentAmount: rentAmount,
+            serviceFee: 14.99,
+            totalAmount: rentAmount + 14.99,
+            status: 'Pending'
+        };
 
         if (activeLease) {
-            currentRent = parseFloat(activeLease.monthlyRent);
-
             // Find latest unpaid invoice
             const latestInvoice = await prisma.invoice.findFirst({
                 where: {
@@ -58,18 +72,16 @@ exports.getDashboard = async (req, res) => {
                 dueStatus = `$${parseFloat(latestInvoice.amount).toLocaleString()}`;
                 serviceFee = `Service Fee: $${parseFloat(latestInvoice.serviceFees).toLocaleString()}`;
                 subValue = latestInvoice.dueDate ? `Due in ${Math.ceil((new Date(latestInvoice.dueDate) - new Date()) / (1000 * 60 * 60 * 24))} days` : 'Due soon';
-
-                // Enhanced breakdown for Dashboard Overview Card
-                rentDetails = {
-                    invoiceId: latestInvoice.id,
-                    month: latestInvoice.month,
-                    rentAmount: parseFloat(latestInvoice.rent),
-                    platformFee: parseFloat(latestInvoice.platformFee),
-                    totalAmount: parseFloat(latestInvoice.amount),
-                    status: latestInvoice.status,
-                    confirmationStatus: latestInvoice.confirmationStatus,
-                    confirmedAt: latestInvoice.confirmedAt
-                };
+                
+                // Align with frontend expectations in TenantDashboard.jsx
+                rentDetails.invoiceId = latestInvoice.id;
+                rentDetails.month = latestInvoice.month || currentMonth;
+                rentDetails.rentAmount = parseFloat(latestInvoice.rent);
+                rentDetails.serviceFee = parseFloat(latestInvoice.serviceFees || latestInvoice.platformFee);
+                rentDetails.totalAmount = parseFloat(latestInvoice.amount);
+                rentDetails.status = latestInvoice.status;
+                rentDetails.confirmationStatus = latestInvoice.confirmationStatus;
+                rentDetails.confirmedAt = latestInvoice.confirmedAt;
             }
         }
 
@@ -105,6 +117,7 @@ exports.getDashboard = async (req, res) => {
 
         res.json({
             name: tenant.name,
+            rentDetails,
             dashboardCards: [
                 {
                     title: 'Current Rent',
@@ -118,7 +131,7 @@ exports.getDashboard = async (req, res) => {
                 {
                     title: 'Lease Status',
                     value: activeLease ? 'Active' : 'No Lease',
-                    subValue: activeLease ? `Expires ${new Date(activeLease.endDate).toLocaleDateString('default', { month: 'short', year: 'numeric' })}` : 'No active lease',
+                    subValue: activeLease ? `Expires ${new Date(leaseEndDate).toLocaleDateString('default', { month: 'short', year: 'numeric' })}` : 'No active lease',
                     icon: 'FileText',
                     color: 'bg-emerald-500',
                     path: '/tenant/lease'
@@ -182,6 +195,12 @@ exports.getProfile = async (req, res) => {
         res.json({
             name: tenant.name,
             email: tenant.email,
+            rentDetails: {
+                propertyName: activeLease?.unit?.property?.name || 'N/A',
+                unitName: activeLease?.unit?.name || 'N/A',
+                monthlyRent: activeLease?.monthlyRent ? parseFloat(activeLease.monthlyRent) : (activeLease?.unit?.rentAmount ? parseFloat(activeLease.unit.rentAmount) : 1000),
+                dueDate: '1st of every month'
+            },
             property: propertyName,
             unit: unitName,
             initials: tenant.name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2)

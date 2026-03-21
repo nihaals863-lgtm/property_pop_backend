@@ -32,12 +32,12 @@ class PaymentService {
         });
         if (existingTx) return { success: true, message: 'Duplicate request handled', transactionId: existingTx.id };
 
-        const PLATFORM_FEE = 14.99;
+        const SERVICE_FEE = 14.99;
 
         // 3. Calculate Fees
         const rentAmount = parseFloat(invoice.rent);
-        const totalAmount = rentAmount + PLATFORM_FEE;
-        const platformFee = PLATFORM_FEE;
+        const totalAmount = rentAmount + SERVICE_FEE;
+        const serviceFee = SERVICE_FEE;
 
         let paymentResult;
 
@@ -91,12 +91,12 @@ class PaymentService {
         // But conceptually we still need to "move" it to owner. 
         // For now, we just proceed to Accounting which likely records the income for owner.
 
-        const landlordAccountId = invoice.unit?.property?.ownerId ? `OWNER-${invoice.unit.property.ownerId}` : 'PLATFORM_RESERVE';
+        const landlordAccountId = invoice.unit?.property?.ownerId ? `OWNER-${invoice.unit.property.ownerId}` : 'SERVICE_RESERVE';
 
         // If it was external, we transferred. If wallet, we effectively moved internal credits.
         // For PayPal unified flow, all funds go to Admin first, so manual transfer is skipped here.
         if (method !== 'wallet' && method !== 'paypal') {
-            await paymentProvider.transfer(totalAmount, rentAmount, platformFee, landlordAccountId);
+            await paymentProvider.transfer(totalAmount, rentAmount, serviceFee, landlordAccountId);
         }
 
         // 6. Record in Ledger and Update Invoice (Atomic)
@@ -106,7 +106,7 @@ class PaymentService {
             gatewayTxId: paymentResult.transactionId,
             amountPaid: totalAmount,
             rentCovered: rentAmount,
-            serviceFee: PLATFORM_FEE,
+            serviceFee: SERVICE_FEE,
             feeTaken: 0
         });
 
@@ -119,7 +119,7 @@ class PaymentService {
             transactionId: paymentResult.transactionId,
             receiptData: {
                 rent: rentAmount,
-                platformFee: platformFee,
+                monthlyServiceFee: serviceFee,
                 total: totalAmount
             }
         };
