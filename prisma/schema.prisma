@@ -88,28 +88,28 @@ model invitation {
 }
 
 model invoice {
-  id             Int           @id @default(autoincrement())
-  invoiceNo      String        @unique(map: "Invoice_invoiceNo_key")
-  tenantId       Int
-  unitId         Int
-  month          String
-  amount         Decimal
-  rent           Decimal
-  serviceFees    Decimal       @default(0.000000000000000000000000000000)
-  status         String        @default("draft")
-  paidAt         DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  dueDate        DateTime?
-  paymentMethod  String?
-  idempotencyKey String?       @unique(map: "Invoice_idempotencyKey_key")
-  totalPaid      Decimal       @default(0.000000000000000000000000000000)
-  platformFee    Decimal       @default(14.99) @db.Decimal(10, 2)
-  confirmationStatus String    @default("Not Confirmed")
-  confirmedAt    DateTime?
-  tenant         user          @relation(fields: [tenantId], references: [id], map: "Invoice_tenantId_fkey")
-  unit           unit          @relation(fields: [unitId], references: [id], map: "Invoice_unitId_fkey")
-  transaction    transaction[]
+  id                 Int           @id @default(autoincrement())
+  invoiceNo          String        @unique(map: "Invoice_invoiceNo_key")
+  tenantId           Int
+  unitId             Int
+  month              String
+  amount             Decimal
+  rent               Decimal
+  serviceFees        Decimal       @default(0.000000000000000000000000000000)
+  status             String        @default("draft")
+  paidAt             DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  dueDate            DateTime?
+  paymentMethod      String?
+  idempotencyKey     String?       @unique(map: "Invoice_idempotencyKey_key")
+  totalPaid          Decimal       @default(0.000000000000000000000000000000)
+  confirmationStatus String        @default("Not Confirmed")
+  confirmedAt        DateTime?
+  platformFee        Decimal       @default(14.99) @db.Decimal(10, 2)
+  tenant             user          @relation(fields: [tenantId], references: [id], map: "Invoice_tenantId_fkey")
+  unit               unit          @relation(fields: [unitId], references: [id], map: "Invoice_unitId_fkey")
+  transaction        transaction[]
 
   @@index([tenantId], map: "Invoice_tenantId_fkey")
   @@index([unitId], map: "Invoice_unitId_fkey")
@@ -168,18 +168,20 @@ model message {
 }
 
 model paymentmethod {
-  id         Int      @id @default(autoincrement())
-  userId     Int
-  type       String
-  label      String
-  last4      String?
-  bankName   String?
-  cardHolder String?
-  expiryDate String?
-  isDefault  Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  user       user     @relation(fields: [userId], references: [id], map: "PaymentMethod_userId_fkey")
+  id                     Int      @id @default(autoincrement())
+  userId                 Int
+  type                   String
+  label                  String
+  last4                  String?
+  bankName               String?
+  cardHolder             String?
+  expiryDate             String?
+  isDefault              Boolean  @default(false)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  encryptedAccountNumber String?
+  routingNumber          String?
+  user                   user     @relation(fields: [userId], references: [id], map: "PaymentMethod_userId_fkey")
 
   @@index([userId], map: "PaymentMethod_userId_fkey")
 }
@@ -195,7 +197,6 @@ model property {
   maintenancetask maintenancetask[]
   owner           user?             @relation(fields: [ownerId], references: [id], map: "Property_ownerId_fkey")
   units           unit[]
-  tickets         ticket[]          @relation("ticket_propertyIdToproperty")
 
   @@index([ownerId], map: "Property_ownerId_fkey")
 }
@@ -261,8 +262,6 @@ model ticket {
   propertyId     Int?
   unitId         Int?
   user           user     @relation(fields: [userId], references: [id], map: "Ticket_userId_fkey")
-  unit           unit?    @relation("ticket_unitIdTounit", fields: [unitId], references: [id], map: "Ticket_unitId_fkey")
-  property       property? @relation("ticket_propertyIdToproperty", fields: [propertyId], references: [id], map: "Ticket_propertyId_fkey")
 
   @@index([userId], map: "Ticket_userId_fkey")
   @@index([unitId], map: "Ticket_unitId_fkey")
@@ -283,6 +282,8 @@ model transaction {
   invoiceId      Int?
   ownerId        Int?
   propertyId     Int?
+  propertyAddress String?
+  unitNumber     String?
   invoice        invoice? @relation(fields: [invoiceId], references: [id], map: "Transaction_invoiceId_fkey")
 
   @@index([invoiceId], map: "Transaction_invoiceId_fkey")
@@ -290,19 +291,18 @@ model transaction {
 
 model unit {
   id                Int                @id @default(autoincrement())
-  propertyId        Int
   name              String
-  floor             String?            @default("G")
+  propertyId        Int
   status            String             @default("Vacant")
-  rentalMode        unit_rentalMode    @default(FULL_UNIT)
   bedrooms          Int                @default(1)
   rentAmount        Decimal            @default(0.000000000000000000000000000000)
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
+  rentalMode        unit_rentalMode    @default(FULL_UNIT)
+  floor             String?            @default("G")
   invoices          invoice[]
   leases            lease[]
   refundadjustments refundadjustment[]
-  tickets           ticket[]           @relation("ticket_unitIdTounit")
   property          property           @relation(fields: [propertyId], references: [id], map: "Unit_propertyId_fkey")
 
   @@index([propertyId], map: "Unit_propertyId_fkey")
@@ -318,29 +318,33 @@ model user {
   type                             String?            @default("Individual")
   createdAt                        DateTime           @default(now())
   updatedAt                        DateTime           @updatedAt
-  billingdetails                    billingdetail[]
-  documents                         document[]
-  insurances                        insurance[]
-  invitations                       invitation[]
+  bank_setup_status                String             @default("PENDING")
+  onboarding_completed             Boolean            @default(false)
+  onboarding_date                  DateTime?
+  registration_status              String             @default("PENDING")
+  billingdetails                   billingdetail[]
+  documents                        document[]
+  insurances                       insurance[]
+  invitations                      invitation[]
   invoices                         invoice[]
   leases                           lease[]
   message_message_receiverIdTouser message[]          @relation("message_receiverIdTouser")
   message_message_senderIdTouser   message[]          @relation("message_senderIdTouser")
-  paymentmethods                    paymentmethod[]
+  paymentmethods                   paymentmethod[]
   properties                       property[]
-  refreshtokens                     refreshtoken[]
-  refundadjustments                 refundadjustment[]
+  refreshtokens                    refreshtoken[]
+  refundadjustments                refundadjustment[]
   tickets                          ticket[]
   wallet                           wallet?
 }
 
 model wallet {
-  id                Int                 @id @default(autoincrement())
-  userId            Int                 @unique(map: "Wallet_userId_key")
-  balance           Decimal             @default(0.00) @db.Decimal(10, 2)
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  user              user                @relation(fields: [userId], references: [id], map: "Wallet_userId_fkey")
+  id                 Int                 @id @default(autoincrement())
+  userId             Int                 @unique(map: "Wallet_userId_key")
+  balance            Decimal             @default(0.00) @db.Decimal(10, 2)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  user               user                @relation(fields: [userId], references: [id], map: "Wallet_userId_fkey")
   wallettransactions wallettransaction[]
 }
 

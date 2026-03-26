@@ -49,21 +49,12 @@ class PaypalProvider {
         try {
             const response = await this.client.execute(request);
             return {
-                success: true,
                 orderId: response.result.id,
                 status: response.result.status
             };
         } catch (err) {
-            console.error('PayPal Create Order Error:', err.statusCode, err.message);
-            if (err.message) {
-                try {
-                    const parsedErr = JSON.parse(err.message);
-                    console.error('PayPal Error Details:', JSON.stringify(parsedErr, null, 2));
-                } catch (pe) {
-                    console.error('Raw PayPal Error:', err.message);
-                }
-            }
-            throw new Error('Failed to create PayPal order: ' + err.message);
+            console.error('PayPal CreateOrder Error Detail:', JSON.stringify(err, null, 2));
+            throw new Error(`PayPal CreateOrder failed: ${err.message}`);
         }
     }
 

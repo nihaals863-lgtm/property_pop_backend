@@ -16,9 +16,12 @@ class AccountingService {
             type,
             amount,
             invoiceId,
+            unitId,
             propertyId,
             ownerId,
-            idempotencyKey
+            idempotencyKey,
+            propertyAddress,
+            unitNumber
         } = txData;
 
         // Fetch last balance to calculate new balance
@@ -36,10 +39,12 @@ class AccountingService {
                 amount: parseFloat(amount),
                 balance: newBalance,
                 status: 'SUCCESS',
-                invoiceId,
-                propertyId,
-                ownerId,
-                idempotencyKey
+                invoice: invoiceId ? { connect: { id: parseInt(invoiceId) } } : undefined,
+                propertyId: propertyId ? parseInt(propertyId) : undefined,
+                ownerId: ownerId ? parseInt(ownerId) : undefined,
+                idempotencyKey,
+                propertyAddress,
+                unitNumber
             }
         });
     }
@@ -92,7 +97,9 @@ class AccountingService {
                 invoiceId: invoice.id,
                 propertyId: invoice.unit.propertyId,
                 ownerId: invoice.unit.property.ownerId,
-                idempotencyKey: `${paymentData.idempotencyKey}-RENT`
+                idempotencyKey: `${paymentData.idempotencyKey}-RENT`,
+                propertyAddress: paymentData.propertyAddress,
+                unitNumber: paymentData.unitNumber
             }, tx);
 
             // 4. Record Service Fee Income for Admin
@@ -104,7 +111,9 @@ class AccountingService {
                     invoiceId: invoice.id,
                     propertyId: invoice.unit.propertyId,
                     ownerId: null, // Admin / Platform
-                    idempotencyKey: `${paymentData.idempotencyKey}-FEE`
+                    idempotencyKey: `${paymentData.idempotencyKey}-FEE`,
+                    propertyAddress: paymentData.propertyAddress,
+                    unitNumber: paymentData.unitNumber
                 }, tx);
             }
 

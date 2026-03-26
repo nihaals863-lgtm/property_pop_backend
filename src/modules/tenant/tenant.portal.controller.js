@@ -46,17 +46,7 @@ exports.getDashboard = async (req, res) => {
         let rentAmount = activeLease?.monthlyRent ? parseFloat(activeLease.monthlyRent) : (activeLease?.unit?.rentAmount ? parseFloat(activeLease.unit.rentAmount) : 1000);
         const leaseEndDate = activeLease?.endDate || new Date(new Date().setFullYear(new Date().getFullYear() + 1));
 
-        let rentDetails = {
-            propertyName: activeLease?.unit?.property?.name || 'N/A',
-            unitName: activeLease?.unit?.name || 'N/A',
-            monthlyRent: rentAmount,
-            dueDate: '1st of every month',
-            month: currentMonth,
-            rentAmount: rentAmount,
-            serviceFee: 14.99,
-            totalAmount: rentAmount + 14.99,
-            status: 'Pending'
-        };
+        let rentDetails = null;
 
         if (activeLease) {
             // Find latest unpaid invoice
@@ -73,15 +63,20 @@ exports.getDashboard = async (req, res) => {
                 serviceFee = `Service Fee: $${parseFloat(latestInvoice.serviceFees).toLocaleString()}`;
                 subValue = latestInvoice.dueDate ? `Due in ${Math.ceil((new Date(latestInvoice.dueDate) - new Date()) / (1000 * 60 * 60 * 24))} days` : 'Due soon';
                 
-                // Align with frontend expectations in TenantDashboard.jsx
-                rentDetails.invoiceId = latestInvoice.id;
-                rentDetails.month = latestInvoice.month || currentMonth;
-                rentDetails.rentAmount = parseFloat(latestInvoice.rent);
-                rentDetails.serviceFee = parseFloat(latestInvoice.serviceFees || latestInvoice.platformFee);
-                rentDetails.totalAmount = parseFloat(latestInvoice.amount);
-                rentDetails.status = latestInvoice.status;
-                rentDetails.confirmationStatus = latestInvoice.confirmationStatus;
-                rentDetails.confirmedAt = latestInvoice.confirmedAt;
+                rentDetails = {
+                    propertyName: activeLease?.unit?.property?.name || 'N/A',
+                    unitName: activeLease?.unit?.name || 'N/A',
+                    monthlyRent: rentAmount,
+                    dueDate: latestInvoice.dueDate || '1st of every month',
+                    month: latestInvoice.month || currentMonth,
+                    rentAmount: parseFloat(latestInvoice.rent),
+                    serviceFee: parseFloat(latestInvoice.serviceFees || latestInvoice.platformFee),
+                    totalAmount: parseFloat(latestInvoice.amount),
+                    status: latestInvoice.status,
+                    invoiceId: latestInvoice.id,
+                    confirmationStatus: latestInvoice.confirmationStatus,
+                    confirmedAt: latestInvoice.confirmedAt
+                };
             }
         }
 

@@ -44,9 +44,9 @@ async function main() {
       ownerId: owner.id,
       units: {
         create: [
-          { name: "A-101", status: "Occupied", rentAmount: 12000, bedrooms: 2 },
-          { name: "A-102", status: "Occupied", rentAmount: 12000, bedrooms: 2 },
-          { name: "A-103", status: "Vacant", rentAmount: 12000, bedrooms: 2 },
+          { name: "A-101", status: "Occupied", rentAmount: 1200, bedrooms: 2 },
+          { name: "A-102", status: "Occupied", rentAmount: 1200, bedrooms: 2 },
+          { name: "A-103", status: "Vacant", rentAmount: 1200, bedrooms: 2 },
         ],
       },
     },
@@ -154,7 +154,7 @@ async function main() {
       startDate: new Date("2026-01-01"),
       endDate: new Date("2027-01-01"),
       status: "Active",
-      monthlyRent: 12000,
+      monthlyRent: 1200,
     },
   });
 
@@ -176,8 +176,9 @@ async function main() {
       tenantId: tenant1.id,
       unitId: unitA101.id,
       month: "Jan 2026",
-      rent: 12000,
-      amount: 12000,
+      rent: 1200,
+      serviceFees: 14.99,
+      amount: 1214.99,
       status: "paid",
       paidAt: new Date("2026-01-05"),
     },
@@ -188,8 +189,8 @@ async function main() {
       date: new Date("2026-01-05"),
       description: "Rent Payment - INV-001",
       type: "Income",
-      amount: 12000,
-      balance: 12000,
+      amount: 1214.99,
+      balance: 1214.99,
       status: "Completed",
       ownerId: owner.id,
       propertyId: sunset.id

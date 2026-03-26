@@ -55,7 +55,9 @@ exports.getTransactions = async (req, res) => {
             type: t.type,
             amount: parseFloat(t.amount),
             balance: parseFloat(t.balance),
-            status: t.status
+            status: t.status,
+            propertyAddress: t.propertyAddress,
+            unitNumber: t.unitNumber
         }));
 
         res.json(formatted);

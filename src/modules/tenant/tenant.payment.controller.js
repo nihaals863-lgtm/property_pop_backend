@@ -8,7 +8,7 @@ const prisma = require('../../config/prisma');
 exports.processPayment = async (req, res) => {
     try {
         const userId = req.user.id;
-        const { invoiceId, paymentMethod, method } = req.body;
+        const { invoiceId, paymentMethod, method, propertyAddress, unitNumber } = req.body;
 
         // Use a unique key for the transaction attempt (frontend should provide this, or we derive from invoice+attempt)
         // For V1, we use invoiceId + month as a base if not provided, but ideally, frontend sends a UUID.
@@ -20,7 +20,7 @@ exports.processPayment = async (req, res) => {
         }
 
         // Call PaymentService - It fetches the correct amount from DB
-        const result = await paymentService.collectPayment(userId, invoiceId, idempotencyKey, method || paymentMethod);
+        const result = await paymentService.collectPayment(userId, invoiceId, idempotencyKey, method || paymentMethod, propertyAddress, unitNumber);
 
         res.json({
             success: true,
@@ -57,7 +57,7 @@ exports.initiatePaypalPayment = async (req, res) => {
         const rentAmount = parseFloat(invoice.rent);
 
         // Ensure serviceFees is set to SERVICE_FEE and amount is updated
-        const totalAmount = rentAmount + SERVICE_FEE;
+        const totalAmount = Math.round((rentAmount + SERVICE_FEE) * 100) / 100;
 
         if (parseFloat(invoice.serviceFees) !== SERVICE_FEE) {
             await prisma.invoice.update({
@@ -88,7 +88,7 @@ exports.initiatePaypalPayment = async (req, res) => {
 exports.confirmPaypalPayment = async (req, res) => {
     try {
         const userId = req.user.id;
-        const { orderId, invoiceId } = req.body;
+        const { orderId, invoiceId, propertyAddress, unitNumber } = req.body;
 
         const capture = await paypalProvider.captureOrder(orderId);
 
@@ -100,7 +100,7 @@ exports.confirmPaypalPayment = async (req, res) => {
             // since the money is already captured.
 
             const idempotencyKey = `PAYPAL-${orderId}`;
-            await paymentService.collectPayment(userId, invoiceId, idempotencyKey, 'paypal');
+            await paymentService.collectPayment(userId, invoiceId, idempotencyKey, 'paypal', propertyAddress, unitNumber);
 
             res.json({
                 success: true,

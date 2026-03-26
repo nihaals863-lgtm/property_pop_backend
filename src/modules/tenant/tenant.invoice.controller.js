@@ -158,78 +158,23 @@ exports.getCurrentMonthInvoice = async (req, res) => {
             });
         }
 
-        // 2. No invoice yet, find or create lease to create one
-        let activeLease;
-        let rentAmount;
-
-            // a. Check for DRAFT leases
-            const draftLease = await prisma.lease.findFirst({
-                where: { tenantId: userId, status: 'DRAFT' },
-                include: { unit: true }
-            });
-            
-            if (draftLease) {
-                console.log(`DEBUG: Found draft lease ${draftLease.id} for tenant ${userId}`);
-                activeLease = draftLease;
-            } else {
-                // b. Check for Invitations to this email
-                const invitation = await prisma.invitation.findFirst({
-                    where: { email: req.user.email, status: 'Pending' }
-                });
-
-                let targetUnitId = null;
-                let monthlyRent = 0;
-
-                if (invitation) {
-                    console.log(`DEBUG: Found pending invitation from owner ${invitation.invitedBy}`);
-                    // Find first available unit of this owner
-                    const firstUnit = await prisma.unit.findFirst({
-                        where: { property: { ownerId: invitation.invitedBy } }
-                    });
-                    if (firstUnit) {
-                        targetUnitId = firstUnit.id;
-                        monthlyRent = parseFloat(firstUnit.rentAmount) || 1000; // Fallback rent
-                    }
-                }
-
-                // c. Global Fallback (Truly uninvited / no landlord found)
-                if (!targetUnitId) {
-                    console.log(`DEBUG: No invitation found. Using global fallback unit.`);
-                    const fallbackUnit = await prisma.unit.findFirst();
-                    if (fallbackUnit) {
-                        targetUnitId = fallbackUnit.id;
-                        monthlyRent = parseFloat(fallbackUnit.rentAmount) || 1000;
-                    }
-                }
-
-                if (!targetUnitId) {
-                    return res.status(404).json({ message: 'No available units found to initiate payment.' });
-                }
-
-                // d. Create a DRAFT lease automatically
-                console.log(`DEBUG: Auto-creating DRAFT lease for unit ${targetUnitId}`);
-                activeLease = await prisma.lease.create({
-                    data: {
-                        tenantId: userId,
-                        unitId: targetUnitId,
-                        status: 'DRAFT',
-                        monthlyRent: monthlyRent.toString(),
-                        startDate: new Date(),
-                        endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1))
-                    },
-                    include: { unit: true }
-                });
-            }
+        // 2. If no invoice exists, we should ONLY create one if they have an ACTIVE lease
+        let activeLease = await prisma.lease.findFirst({
+            where: { tenantId: userId, status: 'Active' },
+            include: { unit: true }
+        });
 
         if (!activeLease) {
-            return res.status(404).json({ message: 'No active lease found. Please contact your landlord.' });
+            return res.status(404).json({ message: 'No active lease or pending invoice found for the current month.' });
         }
 
-        rentAmount = parseFloat(activeLease.monthlyRent || activeLease.unit.rentAmount) || 1000;
-        const SERVICE_FEE = 14.99;
+        // 3. Create invoice automatically ONLY for the active lease
+        const rentAmount = parseFloat(activeLease.monthlyRent || activeLease.unit.rentAmount) || 0;
+        
+        // Use a default or fetch from settings if needed, but for now we keep it consistent with schema
+        const SERVICE_FEE = 14.99; 
         const totalAmount = rentAmount + SERVICE_FEE;
 
-        // 3. Create invoice automatically
         invoice = await prisma.invoice.create({
             data: {
                 invoiceNo: `INV-AUTO-${Date.now()}`,

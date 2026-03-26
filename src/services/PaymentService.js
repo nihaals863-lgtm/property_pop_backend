@@ -8,7 +8,7 @@ const reminderService = require('./PaymentReminderService');
  * Handles payment orchestration, validation, and idempotency.
  */
 class PaymentService {
-    async collectPayment(userId, invoiceId, idempotencyKey, method = 'card') {
+    async collectPayment(userId, invoiceId, idempotencyKey, method = 'card', propertyAddress = null, unitNumber = null) {
         // 1. Fetch Invoice from DB
         const invoice = await prisma.invoice.findUnique({
             where: { id: parseInt(invoiceId) },
@@ -107,7 +107,9 @@ class PaymentService {
             amountPaid: totalAmount,
             rentCovered: rentAmount,
             serviceFee: SERVICE_FEE,
-            feeTaken: 0
+            feeTaken: 0,
+            propertyAddress,
+            unitNumber
         });
 
         // 7. Notify Landlord (Async)

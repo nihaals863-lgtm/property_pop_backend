@@ -60,7 +60,11 @@ exports.getReceivedPayments = async (req, res) => {
             },
             include: {
                 tenant: true,
-                unit: { include: { property: true } }
+                unit: { include: { property: true } },
+                transaction: {
+                    where: { type: 'Income' },
+                    take: 1
+                }
             },
             orderBy: {
                 paidAt: 'desc'
@@ -68,6 +72,7 @@ exports.getReceivedPayments = async (req, res) => {
         });
 
         const formattedPayments = payments.map(payment => {
+            const tx = payment.transaction && payment.transaction.length > 0 ? payment.transaction[0] : null;
             return {
                 id: payment.id,
                 invoiceNo: payment.invoiceNo,
@@ -80,7 +85,9 @@ exports.getReceivedPayments = async (req, res) => {
                 amount: parseFloat(payment.rent), // RENT ONLY
                 method: payment.paymentMethod || 'Manual',
                 date: payment.paidAt ? payment.paidAt.toISOString() : null,
-                status: 'Paid'
+                status: 'Paid',
+                propertyAddress: tx?.propertyAddress || null,
+                unitNumber: tx?.unitNumber || null
             };
         });
 
