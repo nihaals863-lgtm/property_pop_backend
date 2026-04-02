@@ -34,13 +34,27 @@ exports.getLeaseDetails = async (req, res) => {
         }
 
         // Filter for relevant leases in JS if needed, or just take the latest
-        const lease = tenant.leases.find(l => ['Active', 'DRAFT', 'Moved'].includes(l.status)) || tenant.leases[0];
+        // Find the most recent active/relevant lease
+        const lease = tenant.leases.find(l => ['Active', 'Moved'].includes(l.status)) || tenant.leases.find(l => l.status === 'DRAFT') || tenant.leases[0];
 
         const owner = lease.unit.property.owner;
 
         const startDate = lease.startDate || lease.createdAt;
         const endDate = lease.endDate || new Date(new Date(startDate).setFullYear(new Date(startDate).getFullYear() + 1));
-        const rent = parseFloat(lease.monthlyRent) || parseFloat(lease.unit.rentAmount) || 1000;
+        let rentValue = lease.monthlyRent || lease.unit?.rentAmount || 0;
+        
+        // Final fallback: Check latest invoice if rent is still zero
+        if (parseFloat(rentValue) === 0) {
+            const latestInvoice = await prisma.invoice.findFirst({
+                where: { tenantId: userId },
+                orderBy: { createdAt: 'desc' }
+            });
+            if (latestInvoice && latestInvoice.rent) {
+                rentValue = latestInvoice.rent;
+            }
+        }
+        
+        const rent = parseFloat(rentValue);
 
         res.json({
             id: `LEASE-${new Date(startDate).getFullYear()}-${lease.id}`,

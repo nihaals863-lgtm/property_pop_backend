@@ -43,7 +43,20 @@ exports.getDashboard = async (req, res) => {
         const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
         const currentMonth = monthNames[new Date().getMonth()];
 
-        let rentAmount = activeLease?.monthlyRent ? parseFloat(activeLease.monthlyRent) : (activeLease?.unit?.rentAmount ? parseFloat(activeLease.unit.rentAmount) : 1000);
+        let rentAmount = activeLease?.monthlyRent ? parseFloat(activeLease.monthlyRent) : (activeLease?.unit?.rentAmount ? parseFloat(activeLease.unit.rentAmount) : 0);
+
+        // Fallback for rent if it's still 0
+        if (rentAmount === 0 && activeLease) {
+            const lastInv = await prisma.invoice.findFirst({
+                where: { tenantId: userId },
+                orderBy: { createdAt: 'desc' }
+            });
+            if (lastInv && lastInv.rent) rentAmount = parseFloat(lastInv.rent);
+        }
+
+        // Final fallback to 1000 ONLY if still 0
+        if (rentAmount === 0) rentAmount = 1000;
+
         const leaseEndDate = activeLease?.endDate || new Date(new Date().setFullYear(new Date().getFullYear() + 1));
 
         let rentDetails = null;
@@ -193,7 +206,7 @@ exports.getProfile = async (req, res) => {
             rentDetails: {
                 propertyName: activeLease?.unit?.property?.name || 'N/A',
                 unitName: activeLease?.unit?.name || 'N/A',
-                monthlyRent: activeLease?.monthlyRent ? parseFloat(activeLease.monthlyRent) : (activeLease?.unit?.rentAmount ? parseFloat(activeLease.unit.rentAmount) : 1000),
+                monthlyRent: activeLease?.monthlyRent ? parseFloat(activeLease.monthlyRent) : (activeLease?.unit?.rentAmount ? parseFloat(activeLease.unit.rentAmount) : 1200),
                 dueDate: '1st of every month'
             },
             property: propertyName,

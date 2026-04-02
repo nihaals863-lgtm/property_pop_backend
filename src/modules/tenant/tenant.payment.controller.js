@@ -88,7 +88,7 @@ exports.initiatePaypalPayment = async (req, res) => {
 exports.confirmPaypalPayment = async (req, res) => {
     try {
         const userId = req.user.id;
-        const { orderId, invoiceId, propertyAddress, unitNumber } = req.body;
+        const { orderId, invoiceId, propertyAddress, unitNumber, paymentMethod } = req.body;
 
         const capture = await paypalProvider.captureOrder(orderId);
 
@@ -100,7 +100,7 @@ exports.confirmPaypalPayment = async (req, res) => {
             // since the money is already captured.
 
             const idempotencyKey = `PAYPAL-${orderId}`;
-            await paymentService.collectPayment(userId, invoiceId, idempotencyKey, 'paypal', propertyAddress, unitNumber);
+            await paymentService.collectPayment(userId, invoiceId, idempotencyKey, paymentMethod || 'paypal', propertyAddress, unitNumber);
 
             res.json({
                 success: true,

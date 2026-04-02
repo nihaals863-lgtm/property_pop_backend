@@ -72,7 +72,7 @@ class PaymentService {
                 provider: 'WALLET'
             };
 
-        } else if (method === 'paypal') {
+        } else if (method === 'paypal' || method === 'venmo') {
             // PayPal already captured in controller, just proceed to record
             paymentResult = {
                 success: true,

@@ -1,0 +1,3 @@
+﻿Found 2 leases with missing rent
+No valid invoice found for Tenant 89. Skipping.
+Fixing Lease 102 for Tenant 90. Setting rent to 122

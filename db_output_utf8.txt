@@ -1,0 +1,15 @@
+﻿Found 9 tenants
+Tenant: kohilvirat (ID: 74) | Email: kohilvirat@gmail.com
+Tenant: viratkohilew (ID: 75) | Email: viratkohile@gmail.com
+Tenant: sona (ID: 78) | Email: sonu1@gmail.com
+Tenant: queen (ID: 81) | Email: tenant_1774527730573@example.com
+Tenant: raja  (ID: 84) | Email: raja@gmail.com
+  - Lease ID: 98, Status: Active, Rent: 1, UnitRent: 1
+Tenant: qween (ID: 86) | Email: qween@gmail.com
+  - Lease ID: 99, Status: Active, Rent: 120, UnitRent: 1
+Tenant: anmol (ID: 87) | Email: anmol@gmail.com
+  - Lease ID: 100, Status: Active, Rent: 1, UnitRent: 1
+Tenant: tenant (ID: 89) | Email: tenant@property.com
+  - Lease ID: 101, Status: Active, Rent: null, UnitRent: 0
+Tenant: mukal (ID: 90) | Email: mukal@hmail.com
+  - Lease ID: 102, Status: Active, Rent: null, UnitRent: 0

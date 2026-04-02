@@ -71,7 +71,7 @@ exports.getReports = async (req, res) => {
         for (let i = 5; i >= 0; i--) {
             const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
             const mStart = new Date(d.getFullYear(), d.getMonth(), 1);
-            const mEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+            const mEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
 
             const mInvoices = await prisma.invoice.findMany({
                 where: {

@@ -1,25 +1,35 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
-const fs = require('fs');
 
-async function main() {
-    const log = [];
+async function debug() {
     try {
-        const users = await prisma.user.findMany();
-        log.push('Users: ' + JSON.stringify(users, null, 2));
+        const users = await prisma.user.findMany({
+            where: { name: { contains: 'qween' } },
+            include: {
+                leases: {
+                    include: {
+                        unit: {
+                            include: { property: true }
+                        }
+                    },
+                    orderBy: { createdAt: 'desc' }
+                }
+            }
+        });
         
-        const leases = await prisma.lease.findMany();
-        log.push('Leases: ' + JSON.stringify(leases, null, 2));
-        
-        const units = await prisma.unit.findMany();
-        log.push('Units: ' + JSON.stringify(units, null, 2));
+        if (users.length > 0) {
+            console.log('--- LEASES FOR QWEEN ---');
+            users[0].leases.forEach(l => {
+                console.log(`Lease ID: ${l.id}, Status: ${l.status}, Rent: ${l.monthlyRent}, Unit Rent: ${l.unit?.rentAmount}, CreatedAt: ${l.createdAt}`);
+            });
+        } else {
+            console.log('User qween not found');
+        }
     } catch (e) {
-        log.push('Error: ' + e.message);
-        log.push(e.stack);
+        console.error(e);
     } finally {
-        fs.writeFileSync('db_debug.log', log.join('\n\n'));
         await prisma.$disconnect();
     }
 }
 
-main();
+debug();

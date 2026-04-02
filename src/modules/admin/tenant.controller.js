@@ -51,18 +51,30 @@ exports.getAllTenants = async (req, res) => {
             let lastPayment = null;
             
             if (currentLease) {
-                // Get current month/year for comparison
                 const now = new Date();
-                const currentMonth = now.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-                
-                // Find invoice for current month
-                const currentMonthInvoice = t.invoices?.find(inv => inv.month === currentMonth);
-                
-                if (currentMonthInvoice) {
-                    // Check invoice status
+                const currentMonthNum = now.getMonth();
+                const currentYear = now.getFullYear();
+
+                // Check if any invoice is paid this month (by paidAt date)
+                const paidThisMonth = t.invoices?.find(inv => {
+                    if (inv.status !== 'paid' || !inv.paidAt) return false;
+                    const paidDate = new Date(inv.paidAt);
+                    return paidDate.getMonth() === currentMonthNum && paidDate.getFullYear() === currentYear;
+                });
+
+                // Also check by month string as fallback
+                const currentMonthStr = now.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+                const currentMonthInvoice = t.invoices?.find(inv => inv.month === currentMonthStr);
+
+                if (paidThisMonth) {
+                    // Paid this month (by paidAt date)
+                    rentStatus = 'Paid';
+                    lastPayment = new Date(paidThisMonth.paidAt).toISOString().split('T')[0];
+                } else if (currentMonthInvoice) {
+                    // Invoice exists for this month - check its status
                     if (currentMonthInvoice.status === 'paid') {
                         rentStatus = 'Paid';
-                        lastPayment = currentMonthInvoice.paidAt 
+                        lastPayment = currentMonthInvoice.paidAt
                             ? new Date(currentMonthInvoice.paidAt).toISOString().split('T')[0]
                             : null;
                     } else if (currentMonthInvoice.status === 'draft' || currentMonthInvoice.status === 'pending') {
@@ -74,8 +86,8 @@ exports.getAllTenants = async (req, res) => {
                     // No invoice for current month
                     rentStatus = 'Unpaid';
                 }
-                
-                // If no lastPayment found from current month, get from most recent paid invoice
+
+                // Get last payment date from most recent paid invoice
                 if (!lastPayment) {
                     const lastPaidInvoice = t.invoices?.find(inv => inv.status === 'paid' && inv.paidAt);
                     if (lastPaidInvoice) {
