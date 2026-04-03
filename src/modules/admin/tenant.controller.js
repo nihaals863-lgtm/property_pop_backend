@@ -282,13 +282,18 @@ exports.deleteTenant = async (req, res) => {
 exports.updateTenant = async (req, res) => {
     try {
         const id = parseInt(req.params.id);
-        const { name, email, phone, type, unitId } = req.body;
+        const { name, email, password, phone, type, unitId } = req.body;
 
         const updatedTenant = await prisma.$transaction(async (prisma) => {
             // 1. Update basic info
+            const updateData = { name, email, phone, type };
+            if (password) {
+                updateData.password = await bcrypt.hash(password, 10);
+            }
+
             const user = await prisma.user.update({
                 where: { id },
-                data: { name, email, phone, type }
+                data: updateData
             });
 
             // 2. Handle Unit Change if unitId is provided
