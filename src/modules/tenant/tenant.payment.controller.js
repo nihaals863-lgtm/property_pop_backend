@@ -12,8 +12,9 @@ exports.processPayment = async (req, res) => {
         console.log(`WALLET Process Payment: ID=${invoiceId}, Manual=${isManualPay}, Amount=${totalAmount}`);
 
         const idempotencyKey = req.headers['x-idempotency-key'] || `IDEM-${userId}-${invoiceId || 'manual'}-${Date.now()}`;
+        const parsedInvoiceId = parseInt(invoiceId);
 
-        const isManual = isManualPay === true || String(isManualPay) === 'true' || !invoiceId || invoiceId === 'custom' || String(invoiceId).toLowerCase() === 'custom';
+        const isManual = isManualPay === true || String(isManualPay) === 'true' || !invoiceId || invoiceId === 'custom' || String(invoiceId).toLowerCase() === 'custom' || isNaN(parsedInvoiceId);
 
         if (isManual) {
             const actualMethod = method || paymentMethod || 'wallet';
@@ -128,14 +129,16 @@ exports.initiatePaypalPayment = async (req, res) => {
         let serviceFee = 14.99;
         let finalAmount = 14.99;
 
-        if (!invoiceId || invoiceId === 'custom' || isManualPay) {
+        const parsedInvoiceId = parseInt(invoiceId);
+
+        if (!invoiceId || invoiceId === 'custom' || isManualPay || isNaN(parsedInvoiceId)) {
             // Manual flow: use the provided amount
             rentAmount = parseFloat(amount || 0);
             finalAmount = rentAmount + serviceFee;
         } else {
             // Standard flow: fetch invoice from DB
             const invoice = await prisma.invoice.findUnique({
-                where: { id: parseInt(invoiceId) }
+                where: { id: parsedInvoiceId }
             });
             if (!invoice) throw new Error('Invoice not found');
             rentAmount = parseFloat(invoice.rent);
@@ -163,8 +166,9 @@ exports.confirmPaypalPayment = async (req, res) => {
         if (capture.success) {
             const idempotencyKey = `PAYPAL-${orderId}-U${userId}`;
             console.log(`Processing PayPal Capture: ID=${invoiceId}, Manual=${isManualPay}`);
+            const parsedInvoiceId = parseInt(invoiceId);
             
-            if (!invoiceId || invoiceId === 'custom' || isManualPay === true || String(isManualPay) === 'true' || String(invoiceId).toLowerCase() === 'custom') {
+            if (!invoiceId || invoiceId === 'custom' || isManualPay === true || String(isManualPay) === 'true' || String(invoiceId).toLowerCase() === 'custom' || isNaN(parsedInvoiceId)) {
                 // Try to find the tenant's lease to create a proper invoice record
                 const lease = await prisma.lease.findFirst({
                     where: { tenantId: userId },
