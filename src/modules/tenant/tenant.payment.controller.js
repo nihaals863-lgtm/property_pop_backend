@@ -124,6 +124,7 @@ exports.initiatePaypalPayment = async (req, res) => {
         const userId = parseInt(req.user.id);
         const { invoiceId, amount, isManualPay } = req.body;
         console.log(`initiatePaypalPayment: ID=${invoiceId}, manual=${isManualPay}`);
+        console.log('--- DEPLOYMENT VERIFICATION: Version V2 with Manual Fix active ---');
         
         let rentAmount = 0;
         let serviceFee = 14.99;
