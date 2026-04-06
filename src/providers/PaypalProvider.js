@@ -41,7 +41,7 @@ class PaypalProvider {
             purchase_units: [{
                 amount: {
                     currency_code: currency,
-                    value: amount.toString()
+                    value: Number(amount).toFixed(2)
                 }
             }]
         });

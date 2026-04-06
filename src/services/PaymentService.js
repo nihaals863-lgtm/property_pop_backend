@@ -9,9 +9,24 @@ const reminderService = require('./PaymentReminderService');
  */
 class PaymentService {
     async collectPayment(userId, invoiceId, idempotencyKey, method = 'card', propertyAddress = null, unitNumber = null) {
-        // 1. Fetch Invoice from DB
+        console.log(`[PaymentService] collectPayment called with invoiceId:`, invoiceId, `(type: ${typeof invoiceId})`);
+        
+        let idVal = null;
+        if (typeof invoiceId === 'number') {
+            idVal = invoiceId;
+        } else if (typeof invoiceId === 'string' && invoiceId !== '' && !isNaN(parseInt(invoiceId))) {
+            idVal = parseInt(invoiceId);
+        }
+
+        if (!idVal || isNaN(idVal)) {
+            console.error(`[PaymentService] Critical Error: Received invalid invoiceId: ${invoiceId}`);
+            throw new Error(`Invalid Invoice ID: ${invoiceId}`);
+        }
+
+        const id = parseInt(idVal); // Final insurance it is a number
+
         const invoice = await prisma.invoice.findUnique({
-            where: { id: parseInt(invoiceId) },
+            where: { id },
             include: {
                 tenant: true,
                 unit: {
@@ -96,7 +111,7 @@ class PaymentService {
         // If it was external, we transferred. If wallet, we effectively moved internal credits.
         // For PayPal unified flow, all funds go to Admin first, so manual transfer is skipped here.
         if (method !== 'wallet' && method !== 'paypal') {
-            await paymentProvider.transfer(totalAmount, rentAmount, serviceFee, landlordAccountId);
+            await paymentProvider.transfer(totalAmount, totalAmount, 0, landlordAccountId); // Transfer entire amount to Landlord, 0 to platform
         }
 
         // 6. Record in Ledger and Update Invoice (Atomic)

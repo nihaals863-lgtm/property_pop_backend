@@ -86,8 +86,8 @@ exports.getReceivedPayments = async (req, res) => {
                 method: payment.paymentMethod || 'Manual',
                 date: payment.paidAt ? payment.paidAt.toISOString() : null,
                 status: 'Paid',
-                propertyAddress: tx?.propertyAddress || null,
-                unitNumber: tx?.unitNumber || null
+                propertyAddress: tx?.propertyAddress || payment.unit.property?.address || null,
+                unitNumber: tx?.unitNumber || payment.unit.name || null
             };
         });
 

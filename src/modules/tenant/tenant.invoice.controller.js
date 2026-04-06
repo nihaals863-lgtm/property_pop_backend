@@ -13,7 +13,18 @@ exports.getInvoices = async (req, res) => {
             include: { unit: true }
         });
 
-        const formatted = invoices.map(inv => {
+        const orphanTransactions = await prisma.transaction.findMany({
+            where: {
+                invoiceId: null,
+                OR: [
+                    { idempotencyKey: { contains: `IDEM-${userId}-` } },
+                    { idempotencyKey: { contains: `-U${userId}` } }
+                ]
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        const formattedInvoices = invoices.map(inv => {
             const s = inv.status.toLowerCase();
             let statusDisplay = 'Due';
             if (s === 'paid') statusDisplay = 'Paid';
@@ -42,7 +53,30 @@ exports.getInvoices = async (req, res) => {
             };
         });
 
-        res.json(formatted);
+        const formattedOrphans = orphanTransactions.map(tx => {
+            return {
+                id: `tx-${tx.id}`,
+                dbId: null,
+                invoiceNo: `MANUAL-${tx.id}`,
+                month: new Date(tx.createdAt).toLocaleString('default', { month: 'long', year: 'numeric' }),
+                amount: tx.amount.toString(),
+                rent: (parseFloat(tx.amount) - 14.99).toString(),
+                serviceFees: '14.99',
+                serviceFee: '14.99',
+                status: 'Paid',
+                confirmationStatus: 'Confirmed',
+                confirmedAt: tx.createdAt,
+                dueDate: tx.createdAt,
+                paidAt: tx.createdAt,
+                createdAt: tx.createdAt,
+                date: new Date(tx.createdAt).toISOString().split('T')[0],
+                unit: tx.propertyAddress ? `${tx.propertyAddress} ${tx.unitNumber || ''}` : 'Manual Entry'
+            };
+        });
+
+        const allFormatted = [...formattedInvoices, ...formattedOrphans].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        res.json(allFormatted);
     } catch (e) {
         console.error(e);
         res.status(500).json({ message: 'Server error' });

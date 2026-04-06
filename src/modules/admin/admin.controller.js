@@ -511,7 +511,7 @@ exports.createOwner = async (req, res) => {
 exports.updateOwner = async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, email, phone, propertyIds } = req.body;
+        const { name, email, phone, password, propertyIds } = req.body;
 
         const updateData = {
             name,
@@ -521,6 +521,10 @@ exports.updateOwner = async (req, res) => {
                 set: propertyIds?.map(pid => ({ id: pid })) || []
             }
         };
+
+        if (password) {
+            updateData.password = await bcrypt.hash(password, 10);
+        }
 
         const updated = await prisma.user.update({
             where: { id: parseInt(id) },

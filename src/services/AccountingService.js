@@ -39,7 +39,7 @@ class AccountingService {
                 amount: parseFloat(amount),
                 balance: newBalance,
                 status: 'SUCCESS',
-                invoice: invoiceId ? { connect: { id: parseInt(invoiceId) } } : undefined,
+                invoice: invoiceId && !isNaN(parseInt(invoiceId)) ? { connect: { id: parseInt(invoiceId) } } : undefined,
                 propertyId: propertyId ? parseInt(propertyId) : undefined,
                 ownerId: ownerId ? parseInt(ownerId) : undefined,
                 idempotencyKey,
@@ -54,9 +54,14 @@ class AccountingService {
      * Marks invoice as paid and creates a ledger entry atomically.
      */
     async processInvoicePayment(invoiceId, paymentData) {
+        const id = typeof invoiceId === 'string' ? parseInt(invoiceId) : invoiceId;
+        if (!id || isNaN(id)) {
+            throw new Error(`Invalid Invoice ID for reconciliation: ${invoiceId}`);
+        }
+
         return await prisma.$transaction(async (tx) => {
             const invoice = await tx.invoice.findUnique({
-                where: { id: invoiceId },
+                where: { id },
                 include: { unit: { include: { property: true } } }
             });
 
@@ -67,7 +72,7 @@ class AccountingService {
 
             // 1. Update Invoice status and confirmation
             const updatedInvoice = await tx.invoice.update({
-                where: { id: invoiceId },
+                where: { id },
                 data: {
                     status: 'paid',
                     paidAt: new Date(),
@@ -102,7 +107,7 @@ class AccountingService {
                 unitNumber: paymentData.unitNumber
             }, tx);
 
-            // 4. Record Service Fee Income for Admin
+            // 4. Record Service Fee Income for Landlord (previously Admin)
             if (paymentData.serviceFee > 0) {
                 await this.recordTransaction({
                     description: `Monthly Service Fee ($14.99) for Invoice ${invoice.invoiceNo}`,
@@ -110,7 +115,7 @@ class AccountingService {
                     amount: paymentData.serviceFee,
                     invoiceId: invoice.id,
                     propertyId: invoice.unit.propertyId,
-                    ownerId: null, // Admin / Platform
+                    ownerId: invoice.unit.property.ownerId, // Landlord instead of Admin
                     idempotencyKey: `${paymentData.idempotencyKey}-FEE`,
                     propertyAddress: paymentData.propertyAddress,
                     unitNumber: paymentData.unitNumber

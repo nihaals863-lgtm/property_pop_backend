@@ -81,7 +81,7 @@ exports.createTicket = async (req, res) => {
             return res.status(400).json({ status: 'error', message: 'Subject and Priority are required' });
         }
 
-        // STEP 3: Resolve unit_id SAFELY
+        // STEP 3: Resolve unit_id Gracefully
         const activeLease = await prisma.lease.findFirst({
             where: {
                 tenantId: userId,
@@ -90,18 +90,8 @@ exports.createTicket = async (req, res) => {
             include: { unit: true }
         });
 
-        if (!activeLease) {
-            console.warn(`CreateTicket Failed: No active lease found for user ${userId}`);
-            return res.status(400).json({ status: 'error', message: 'You do not have an active lease. Cannot create ticket.' });
-        }
-
-        const propertyId = activeLease.unit?.propertyId;
-        const unitId = activeLease.unitId;
-
-        if (!unitId) {
-            console.error(`CreateTicket Failed: Active lease ${activeLease.id} has no unitId`);
-            return res.status(500).json({ status: 'error', message: 'Lease data is corrupt. Contact support.' });
-        }
+        const propertyId = activeLease?.unit?.propertyId || undefined;
+        const unitId = activeLease?.unitId || undefined;
 
         // STEP 4: Multipart File Handling (express-fileupload)
         let attachmentUrls = [];

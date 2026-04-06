@@ -2,7 +2,7 @@ const prisma = require('../../config/prisma');
 
 exports.getWallet = async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = parseInt(req.user.id);
         let wallet = await prisma.wallet.findUnique({
             where: { userId },
             include: {
@@ -13,7 +13,14 @@ exports.getWallet = async (req, res) => {
             }
         });
 
+        const userExists = await prisma.user.findUnique({ where: { id: userId } });
+        if (!userExists) {
+            console.error(`ERROR: User ${userId} not found in database!`);
+            return res.status(404).json({ message: 'User account not found' });
+        }
+
         if (!wallet) {
+            console.log(`DEBUG: Creating new wallet for user ${userId}...`);
             wallet = await prisma.wallet.create({
                 data: {
                     userId,
@@ -27,14 +34,16 @@ exports.getWallet = async (req, res) => {
 
         res.json(wallet);
     } catch (error) {
-        console.error('Get Wallet Error:', error);
-        res.status(500).json({ message: 'Server error fetching wallet' });
+        console.error('Get Wallet Error - Detailed:', error);
+        res.status(500).json({ message: 'Server error fetching wallet', error: error.message });
     }
 };
 
 exports.addFunds = async (req, res) => {
     try {
-        const userId = req.user.id;
+        console.log('DEBUG: req.user:', JSON.stringify(req.user));
+        const userId = parseInt(req.user.id);
+        console.log('DEBUG: Parsed userId:', userId);
         const { amount, method } = req.body;
 
         if (!amount || amount <= 0) {
@@ -43,13 +52,20 @@ exports.addFunds = async (req, res) => {
 
         let wallet = await prisma.wallet.findUnique({ where: { userId } });
         if (!wallet) {
+            const userExists = await prisma.user.findUnique({ where: { id: userId } });
+            if (!userExists) {
+                console.error(`ERROR: User ${userId} not found in database!`);
+                return res.status(404).json({ message: 'User account not found' });
+            }
+            
+            console.log(`DEBUG: Creating new wallet for user ${userId}...`);
             wallet = await prisma.wallet.create({
                 data: { userId, balance: 0.00 }
             });
         }
 
         const updatedWallet = await prisma.wallet.update({
-            where: { id: wallet.id },
+            where: { userId },
             data: {
                 balance: { increment: Number(amount) },
                 wallettransactions: {
@@ -71,29 +87,29 @@ exports.addFunds = async (req, res) => {
 
         res.json(updatedWallet);
     } catch (error) {
-        console.error('Add Funds Error:', error);
-        res.status(500).json({ message: 'Server error adding funds' });
+        console.error('Add Funds Error - Detailed:', error);
+        res.status(500).json({ message: 'Server error adding funds', error: error.message });
     }
 };
 
 exports.withdraw = async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = parseInt(req.user.id);
         const { amount, method } = req.body;
 
-        if (!amount || amount <= 0) {
+        if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
             return res.status(400).json({ message: 'Invalid amount' });
         }
 
         const wallet = await prisma.wallet.findUnique({ where: { userId } });
         if (!wallet) return res.status(404).json({ message: 'Wallet not found' });
 
-        if (parseFloat(wallet.balance) < parseFloat(amount)) {
+        if (parseFloat(wallet.balance.toString()) < Number(amount)) {
             return res.status(400).json({ message: 'Insufficient funds' });
         }
 
         const updatedWallet = await prisma.wallet.update({
-            where: { id: wallet.id },
+            where: { userId },
             data: {
                 balance: { decrement: Number(amount) },
                 wallettransactions: {
@@ -116,16 +132,16 @@ exports.withdraw = async (req, res) => {
         res.json(updatedWallet);
     } catch (error) {
         console.error('Withdraw Error:', error);
-        res.status(500).json({ message: 'Server error withdrawing funds' });
+        res.status(500).json({ message: 'Server error withdrawing funds', error: error.message });
     }
 };
 
 exports.transfer = async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = parseInt(req.user.id);
         const { amount, recipient } = req.body;
 
-        if (!amount || amount <= 0) {
+        if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
             return res.status(400).json({ message: 'Invalid amount' });
         }
         if (!recipient) {
@@ -134,7 +150,7 @@ exports.transfer = async (req, res) => {
 
         await prisma.$transaction(async (tx) => {
             const senderWallet = await tx.wallet.findUnique({ where: { userId } });
-            if (!senderWallet || Number(senderWallet.balance) < Number(amount)) {
+            if (!senderWallet || parseFloat(senderWallet.balance.toString()) < Number(amount)) {
                 throw new Error('Insufficient funds');
             }
 
@@ -203,6 +219,6 @@ exports.transfer = async (req, res) => {
 
     } catch (error) {
         console.error('Transfer Error:', error);
-        res.status(400).json({ message: error.message || 'Transfer failed' });
+        res.status(400).json({ message: error.message || 'Transfer failed', error: error.message });
     }
 };

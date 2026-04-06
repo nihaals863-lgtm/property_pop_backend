@@ -7,100 +7,210 @@ const prisma = require('../../config/prisma');
  */
 exports.processPayment = async (req, res) => {
     try {
-        const userId = req.user.id;
-        const { invoiceId, paymentMethod, method, propertyAddress, unitNumber } = req.body;
+        const userId = parseInt(req.user.id);
+        const { invoiceId, paymentMethod, method, propertyAddress, unitNumber, isManualPay, totalAmount, serviceFee } = req.body;
+        console.log(`WALLET Process Payment: ID=${invoiceId}, Manual=${isManualPay}, Amount=${totalAmount}`);
 
-        // Use a unique key for the transaction attempt (frontend should provide this, or we derive from invoice+attempt)
-        // For V1, we use invoiceId + month as a base if not provided, but ideally, frontend sends a UUID.
-        // Assuming frontend might not have changed, we'll use a derived key for now:
-        const idempotencyKey = req.headers['x-idempotency-key'] || `IDEM-${userId}-${invoiceId}-${Date.now()}`;
+        const idempotencyKey = req.headers['x-idempotency-key'] || `IDEM-${userId}-${invoiceId || 'manual'}-${Date.now()}`;
 
-        if (!invoiceId) {
-            return res.status(400).json({ message: 'Invoice ID is required' });
+        const isManual = isManualPay === true || String(isManualPay) === 'true' || !invoiceId || invoiceId === 'custom' || String(invoiceId).toLowerCase() === 'custom';
+
+        if (isManual) {
+            const actualMethod = method || paymentMethod || 'wallet';
+            const isWalletPayment = actualMethod.toLowerCase() === 'wallet';
+
+            if (isWalletPayment) {
+                const wallet = await prisma.wallet.findUnique({ where: { userId } });
+                if (!wallet) throw new Error('Wallet not found');
+                if (parseFloat(wallet.balance) < parseFloat(totalAmount)) throw new Error('Insufficient balance');
+            }
+
+            // Try to find lease for auto-invoice
+            const lease = await prisma.lease.findFirst({
+                where: { tenantId: userId },
+                include: { unit: { include: { property: true } } }
+            });
+
+            await prisma.$transaction(async (tx) => {
+                if (isWalletPayment) {
+                    const wallet = await tx.wallet.findUnique({ where: { userId } });
+                    await tx.wallet.update({
+                        where: { id: wallet.id },
+                        data: {
+                            balance: { decrement: parseFloat(totalAmount) },
+                            wallettransactions: {
+                                create: {
+                                    type: 'RENT_PAYMENT',
+                                    amount: parseFloat(totalAmount),
+                                    method: 'WALLET',
+                                    status: 'SUCCESS'
+                                }
+                            }
+                        }
+                    });
+                }
+
+                if (lease) {
+                    // Create invoice for history
+                    const newInvoice = await tx.invoice.create({
+                        data: {
+                            invoiceNo: `INV-${Date.now()}`,
+                            tenantId: userId,
+                            unitId: lease.unitId,
+                            month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }),
+                            amount: parseFloat(totalAmount),
+                            rent: parseFloat(totalAmount) - 14.99,
+                            serviceFees: 14.99,
+                            status: actualMethod.toLowerCase() === 'bank_transfer' ? 'pending' : 'paid',
+                            paidAt: new Date(),
+                            paymentMethod: actualMethod.toUpperCase(),
+                            totalPaid: parseFloat(totalAmount),
+                            confirmationStatus: actualMethod.toLowerCase() === 'bank_transfer' ? 'Pending' : 'Confirmed',
+                            confirmedAt: new Date(),
+                            dueDate: new Date()
+                        }
+                    });
+
+                    const accountingService = require('../../services/AccountingService');
+                    await accountingService.recordTransaction({
+                        description: `Manual Rent Payment - ${actualMethod.toUpperCase()} (Auto-Invoice)`,
+                        type: 'Income',
+                        amount: totalAmount,
+                        invoiceId: newInvoice.id,
+                        propertyId: lease.unit.propertyId,
+                        ownerId: lease.unit.property.ownerId,
+                        idempotencyKey,
+                        propertyAddress,
+                        unitNumber
+                    }, tx);
+                } else {
+                    const accountingService = require('../../services/AccountingService');
+                    await accountingService.recordTransaction({
+                        description: `Manual Rent Payment - ${actualMethod.toUpperCase()}`,
+                        type: 'Income',
+                        amount: totalAmount,
+                        idempotencyKey,
+                        propertyAddress,
+                        unitNumber
+                    }, tx);
+                }
+            });
+
+            return res.json({
+                success: true,
+                message: 'Manual payment processed and recorded successfully',
+                transactionId: `MAN-${Date.now()}`
+            });
         }
 
-        // Call PaymentService - It fetches the correct amount from DB
+        // Call PaymentService for standard invoice flow
         const result = await paymentService.collectPayment(userId, invoiceId, idempotencyKey, method || paymentMethod, propertyAddress, unitNumber);
 
         res.json({
             success: true,
             message: 'Payment processed successfully',
-            receipt: `RCP-${result.transactionId}`,
-            transactionId: result.transactionId
+            result
         });
 
     } catch (e) {
-        console.error('Payment Error:', e.message);
-        res.status(400).json({ message: e.message || 'Payment processing failed' });
-    }
-};
-
-const paypalProvider = require('../../providers/PaypalProvider');
-
-/**
- * Initiate PayPal Payment
- */
-exports.initiatePaypalPayment = async (req, res) => {
-    try {
-        const userId = req.user.id;
-        const { invoiceId } = req.body;
-
-        const invoice = await prisma.invoice.findUnique({
-            where: { id: parseInt(invoiceId) }
-        });
-
-        if (!invoice) return res.status(404).json({ message: 'Invoice not found' });
-        if (invoice.tenantId !== userId) return res.status(403).json({ message: 'Unauthorized' });
-        if (invoice.status === 'paid') return res.status(400).json({ message: 'Already paid' });
-
-        const SERVICE_FEE = 14.99;
-        const rentAmount = parseFloat(invoice.rent);
-
-        // Ensure serviceFees is set to SERVICE_FEE and amount is updated
-        const totalAmount = Math.round((rentAmount + SERVICE_FEE) * 100) / 100;
-
-        if (parseFloat(invoice.serviceFees) !== SERVICE_FEE) {
-            await prisma.invoice.update({
-                where: { id: invoice.id },
-                data: {
-                    serviceFees: SERVICE_FEE,
-                    amount: totalAmount
-                }
-            });
-        }
-
-        const order = await paypalProvider.createOrder(totalAmount, 'USD');
-
-        res.json({
-            success: true,
-            orderId: order.orderId
-        });
-
-    } catch (e) {
-        console.error('Paypal Init Error:', e.message);
+        console.error('Wallet Process Error:', e.message);
         res.status(500).json({ message: e.message });
     }
 };
 
-/**
- * Confirm PayPal Payment
- */
+exports.initiatePaypalPayment = async (req, res) => {
+    try {
+        const userId = parseInt(req.user.id);
+        const { invoiceId, amount, isManualPay } = req.body;
+        console.log(`initiatePaypalPayment: ID=${invoiceId}, manual=${isManualPay}`);
+        
+        let rentAmount = 0;
+        let serviceFee = 14.99;
+        let finalAmount = 14.99;
+
+        if (!invoiceId || invoiceId === 'custom' || isManualPay) {
+            // Manual flow: use the provided amount
+            rentAmount = parseFloat(amount || 0);
+            finalAmount = rentAmount + serviceFee;
+        } else {
+            // Standard flow: fetch invoice from DB
+            const invoice = await prisma.invoice.findUnique({
+                where: { id: parseInt(invoiceId) }
+            });
+            if (!invoice) throw new Error('Invoice not found');
+            rentAmount = parseFloat(invoice.rent);
+            finalAmount = rentAmount + 14.99;
+        }
+
+        const paypalProvider = require('../../providers/PaypalProvider');
+        const order = await paypalProvider.createOrder(finalAmount, 'USD');
+
+        res.json(order);
+    } catch (e) {
+        console.error('Paypal Initiate Error:', e.message);
+        res.status(500).json({ message: e.message });
+    }
+};
+
 exports.confirmPaypalPayment = async (req, res) => {
     try {
-        const userId = req.user.id;
-        const { orderId, invoiceId, propertyAddress, unitNumber, paymentMethod } = req.body;
+        const userId = parseInt(req.user.id);
+        const { orderId, invoiceId, propertyAddress, unitNumber, paymentMethod, amount, isManualPay } = req.body;
 
+        const paypalProvider = require('../../providers/PaypalProvider');
         const capture = await paypalProvider.captureOrder(orderId);
 
         if (capture.success) {
-            // Update local DB via PaymentService or directly if simpler for now
-            // But let's use the core PaymentService logic for consistency if possible
-            // However, PaymentService.collectPayment is designed for a single step.
-            // Let's call accountingService and prisma update directly here for clarity
-            // since the money is already captured.
+            const idempotencyKey = `PAYPAL-${orderId}-U${userId}`;
+            console.log(`Processing PayPal Capture: ID=${invoiceId}, Manual=${isManualPay}`);
+            
+            if (!invoiceId || invoiceId === 'custom' || isManualPay === true || String(isManualPay) === 'true' || String(invoiceId).toLowerCase() === 'custom') {
+                // Try to find the tenant's lease to create a proper invoice record
+                const lease = await prisma.lease.findFirst({
+                    where: { tenantId: userId },
+                    include: { unit: { include: { property: true } } }
+                });
 
-            const idempotencyKey = `PAYPAL-${orderId}`;
-            await paymentService.collectPayment(userId, invoiceId, idempotencyKey, paymentMethod || 'paypal', propertyAddress, unitNumber);
+                if (lease) {
+                    // Create an invoice record automatically
+                    const newInvoice = await prisma.invoice.create({
+                        data: {
+                            invoiceNo: `INV-${Date.now()}`,
+                            tenantId: userId,
+                            unitId: lease.unitId,
+                            month: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }),
+                            amount: amount,
+                            rent: parseFloat(amount) - 14.99,
+                            serviceFees: 14.99,
+                            status: 'paid', // Mark as paid immediately since PayPal succeeded
+                            paidAt: new Date(),
+                            paymentMethod: 'PAYPAL',
+                            totalPaid: parseFloat(amount),
+                            confirmationStatus: 'Confirmed',
+                            confirmedAt: new Date(),
+                            dueDate: new Date()
+                        }
+                    });
+
+                    // Update local invoiceId for subsequent steps if needed
+                    // But here we can directly use PaymentService for better recording
+                    await paymentService.collectPayment(userId, newInvoice.id, idempotencyKey, paymentMethod || 'paypal', propertyAddress, unitNumber);
+                } else {
+                    // Fallback to direct transaction without invoice if no lease found
+                    const accountingService = require('../../services/AccountingService');
+                    await accountingService.recordTransaction({
+                        description: `Manual Rent Payment - PayPal`,
+                        type: 'Income',
+                        amount: amount,
+                        idempotencyKey,
+                        propertyAddress,
+                        unitNumber
+                    });
+                }
+            } else {
+                // Invoice Payment Recording
+                await paymentService.collectPayment(userId, invoiceId, idempotencyKey, paymentMethod || 'paypal', propertyAddress, unitNumber);
+            }
 
             res.json({
                 success: true,

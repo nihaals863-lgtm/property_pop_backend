@@ -19,6 +19,17 @@ const ownerRoutes = require('./modules/owner/owner.routes');
 
 const tenantPortalRoutes = require('./modules/tenant/tenant.portal.routes');
 
+router.get('/debug/users', async (req, res) => {
+    try {
+        const users = await require('./config/prisma').user.findMany({
+            select: { id: true, email: true, name: true, role: true }
+        });
+        res.json(users);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 const { authenticate, authorize } = require('./middlewares/auth.middleware');
 
 router.use('/auth', authRoutes);
